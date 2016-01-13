@@ -10,5 +10,7 @@ docker run -d \
 -e CHRONOS_ZK_HOSTS=zk://$node-1:2181,$node-2:2181,$node-3:2181 \
 -e CHRONOS_HOSTNAME=$ip \
 -e CHRONOS_MESOS_FRAMEWORK_NAME=$name \
---name chronos --net host --restart always <IMAGE>
+-e CHRONOS_ZK_PATH=$zkpath \ 
+--name chronos --net host --restart always indigodatacloud/chronos
 </pre>
+
