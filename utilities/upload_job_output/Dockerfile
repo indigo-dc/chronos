@@ -10,7 +10,7 @@ rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN pip install awscli python-keystoneclient python-swiftclient
 
-RUN curl -o install.sh http://onedata-dev-packages.cloud.plgrid.pl/oneclient.sh &&
+RUN curl -o install.sh http://onedata-dev-packages.cloud.plgrid.pl/oneclient.sh && \
 sh install.sh ${ONEDATA_VERSION}
 
 COPY run.sh /
