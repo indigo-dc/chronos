@@ -13,6 +13,9 @@ RUN pip install awscli python-keystoneclient python-swiftclient
 RUN curl -o install.sh http://onedata-dev-packages.cloud.plgrid.pl/oneclient.sh && \
 sh install.sh ${ONEDATA_VERSION}
 
+ENV AUTHENTICATION=token
+ENV NO_CHECK_CERTIFICATE=true
+
 COPY run.sh /
 
 ENTRYPOINT ["/run.sh"]
