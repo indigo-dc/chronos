@@ -3,7 +3,7 @@ MAINTAINER Marica Antonacci <marica.antonacci@gmail.com>
 
 RUN apt-get update
 
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl python-dev python-pip && \
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl python-dev python-pip python-netifaces && \
 rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN pip install awscli python-keystoneclient python-swiftclient
