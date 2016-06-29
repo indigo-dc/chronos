@@ -1,7 +1,5 @@
-FROM ubuntu:15.10
+FROM ubuntu:14.04
 MAINTAINER Marica Antonacci <marica.antonacci@gmail.com>
-
-ARG ONEDATA_VERSION="3.0.0-beta4"
 
 RUN apt-get update
 
@@ -10,8 +8,7 @@ rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 RUN pip install awscli python-keystoneclient python-swiftclient
 
-RUN curl -o install.sh http://onedata-dev-packages.cloud.plgrid.pl/oneclient.sh && \
-sh install.sh ${ONEDATA_VERSION}
+RUN curl --insecure -sS  https://get.onedata.org/oneclient.sh | bash
 
 ENV AUTHENTICATION=token
 ENV NO_CHECK_CERTIFICATE=true
