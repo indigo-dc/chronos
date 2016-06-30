@@ -18,50 +18,7 @@ import re
 import shlex
 
 
-# "environmentVariables": [
-#    {
-#      "name": "PROVIDER_HOSTNAME",
-#      "value": "<ONEDATA_PROVIDER_IP>"
-#    },
-#    {
-#      "name": "ONEDATA_TOKEN",
-#      "value": "xxxxxxxx"
-#    },
-#    {
-#      "name": "ONEDATA_SPACE",
-#      "value": "<path>"
-#    },
-#    {
-#      "name": "INPUT_FILENAME",
-#      "value": "<input filename --> coincindes with amber-job-01 OUTPUT_FILENAME>"
-#    },
-#    {
-#      "name": "OUTPUT_PROTOCOL",
-#      "value": "http(s)|ftp(s)|S3|Swift|WebDav"
-#    },
-#    {
-#      "name": "OUTPUT_URL",
-#      "value": "<output URL>"
-#    },
-#    {
-#      "name": "OUTPUT_CREDENTIALS",
-#      "value": "{valid json}"
-#    },
-#    {
-#      "name": "OUTPUT_PATH",
-#      "value": "<path>" --> e.g. /<bucket-name>/<object-name>
-#    }
-#
-
-
 allowed_protocols=['http', 'https', 'webdav', 'webdavs', 's3', 'swift+keystone']
-
-import json
-
-def str2json (s):
-  #s = "{'muffin' : 'lolz', 'foo' : 'kitty'}"
-  json_acceptable_string = s.replace("'", "\"")
-  return json.loads(json_acceptable_string)
 
 
 def run_command(cmd, env=None):
@@ -69,37 +26,65 @@ def run_command(cmd, env=None):
     Execute the external command and get its exitcode, stdout and stderr.
     """
     args = shlex.split(cmd)
-    print args
- 
+
+    if "DEBUG" in os.environ:
+       print args
+    
     proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     out, err = proc.communicate()
     exitcode = proc.returncode
     #
-    return exitcode, out, err
+    if exitcode != 0:
+       raise RuntimeError("Command failed with exit code %s. %s" % (exitcode, err))
+    
+    return out
 
+###
+# Class FileUploader implements functions for uploading files to
+# - http(s), webdav(s)
+# - swift+keystone
+# - s3
+# using proper user credentials
+###
 class FileUploader(object):
 
 
-    def __init__(self, filename, protocol, url, path, credentials):
-           
-        if os.path.isfile(filename):
-           self.filename=filename
-        else:
-           raise ValueError('"%(path)s" is not a valid file.' % {'path': filename})
-
-        self.url=url
-        self.outpath=path
+    def __init__(self):
         
-        self.protocol=protocol.lower()
+        #read mandatory env variables
+        self.path=os.environ["UPLOAD_DIR"]
+        self.filenames=os.environ["OUTPUT_FILENAMES"].split(",")
+        self.protocol=os.environ["OUTPUT_PROTOCOL"].lower()
+        self.url=os.environ["OUTPUT_ENDPOINT"]
+        self.outpath=os.environ["OUTPUT_PATH"]
+        self.username=os.environ["OUTPUT_USERNAME"]
+        self.password=os.environ["OUTPUT_PASSWORD"]
+        
+        #read optional env variables
+        try:
+          self.tenant=os.environ["OUTPUT_TENANT"]
+        except KeyError as e:
+          self.tenant = ""
+        try:
+          self.region=os.environ["OUTPUT_REGION"]
+        except KeyError as e:
+          self.region = ""
+
+        # check file existence        
+        for filename in self.filenames:
+           filepath=os.path.join(self.path,filename)
+           if not os.path.isfile(filepath):
+              raise ValueError('"%(path)s" is not a valid file.' % {'path': filepath})
+
+        # check supported protocol
         if self.protocol not in allowed_protocols:
            raise ValueError('Protocol not supported. Allowed protocols: %s' % allowed_protocols) 
 
-        self.credentials=credentials
-
-    def upload(self):
+    # call the proper upload method depending on the protocol
+    def main(self):
 
         if ( re.match('^(http|webdav)s?', self.protocol)  ):
-           self._curlUpload();
+           self._httpUpload();
            
         if ( self.protocol == 's3' ):
            self._s3Upload();
@@ -107,97 +92,82 @@ class FileUploader(object):
         if ( self.protocol == 'swift+keystone'):
            self._swiftUpload();
            
-
-    def _curlUpload(self):
-        creds = str2json(self.credentials)
-        try:
-          username=creds['USERNAME']
-          password=creds['PASSWORD'] 
-        except KeyError as e:
-          print "Invalid credentials field: ", e
-          sys.exit(1)
+    # method for uploading using web protocols (http/webdav)
+    def _httpUpload(self):
         
-        cmd = "curl -k -u %s:%s -X PUT %s/%s -T %s" % (username, password, self.url, self.outpath, self.filename) 
+        for filename in self.filenames:
+            filepath=os.path.join(self.path,filename)
+            print "[INFO] Uploading File %s" % filepath
+            cmd = "curl -k -u %s:%s --write-out %%{http_code} --silent --output /dev/null -X PUT %s/%s/%s -T %s" % (self.username, self.password, self.url, self.outpath, filename, filepath) 
+            out = run_command(cmd)
+           
+            if out[0:2] != '20':
+               raise RuntimeError("Upload failed with HTTP code %s" % out)
+               
 
-        exitcode, out, err = run_command(cmd)
-        print out
-        print err
-        sys.exit(exitcode)
-
-        
-
+    # method for uploading using S3 protocol    
     def _s3Upload(self):
         #aws --endpoint-url http://cloud.recas.ba.infn.it:8080/ s3 cp ./main.py s3://container/main.py        
-        creds = str2json(self.credentials)
-        try:
-          accessKey=creds['AWS_ACCESS_KEY_ID']
-          secret=creds['AWS_SECRET_ACCESS_KEY']
-        except KeyError as e:
-          print "Invalid credentials field ", e
-          sys.exit(1)
+        #aws --endpoint-url https://s3.amazonaws.com --region us-east-1 s3 cp ./main.py s3://container/main.py
 
         env = os.environ.copy() 
-        env['AWS_ACCESS_KEY_ID']=accessKey
-        env['AWS_SECRET_ACCESS_KEY']=secret
-
-        path=self.outpath.strip('/')
+        env['AWS_ACCESS_KEY_ID']=self.username
+        env['AWS_SECRET_ACCESS_KEY']=self.password
         
-        #outpath="container/tesfile.zip"
-        cmd = "aws --no-verify-ssl --endpoint-url %s s3 cp %s s3://%s" % (self.url, self.filename, path)
-       
-        exitcode, out, err = run_command(cmd, env)
-        print out
-        print err
-        sys.exit(exitcode)
+        options=""
+        if self.region != "":
+           options = "--region " + self.region
+        
+        bucket=self.outpath.strip('/')
+        
+        for filename in self.filenames:
+           filepath=os.path.join(self.path,filename)
+           print "[INFO] Uploading File %s" % filepath
+           cmd = "aws --no-verify-ssl --endpoint-url %s %s s3 cp %s s3://%s/%s" % (self.url, options, filepath, bucket, filename)
+           out = run_command(cmd, env)
+           print out
 
 
+    # method for uploading using Swift protocol
     def _swiftUpload(self):
-        creds = str2json(self.credentials)
-        try:
-          username=creds['USERNAME']
-          password=creds['PASSWORD']
-          tenant=creds['TENANT']
-          authUrl=creds['AUTH_URL']
-        except KeyError as e:
-          print "Invalid credentials field ", e
-          sys.exit(1)
 
         env = os.environ.copy()
-        env['OS_USERNAME']=username
-        env['OS_TENANT_NAME']=tenant
-        env['OS_PASSWORD']=password
-        env['OS_AUTH_URL']=authUrl
-
-       # outpath="container/prova/tesfile.zip"
-        path=self.outpath.strip('/')
-        container, objectname = path.split("/",1)
-        cmd = "swift --insecure upload %s %s --object-name %s" % (container, self.filename, objectname)
-
-        exitcode, out, err = run_command(cmd, env)
-        print out
-        print err
-        sys.exit(exitcode)
+        env['OS_USERNAME']=self.username
+        env['OS_PASSWORD']=self.password
+        env['OS_AUTH_URL']=self.url
         
+        if self.tenant != "":
+           env['OS_TENANT_NAME']=self.tenant
+        if self.region != "":
+           env['OS_REGION_NAME']=self.region
 
-
+        container=self.outpath.strip('/')
+        
+        for filename in self.filenames:
+           filepath=os.path.join(self.path,filename)
+           print "[INFO] Uploading File %s to container %s with object name %s" % (filepath, container, filename)
+           cmd = "swift --insecure upload %s %s --object-name %s" % (container, filepath, filename)
+           out = run_command(cmd, env)
+           print out 
 
 def main(args=None):
   try:
-    filename=os.environ["INPUT_FILENAME"]
-    protocol=os.environ["OUTPUT_PROTOCOL"]
-    url=os.environ["OUTPUT_URL"]
-    path=os.environ["OUTPUT_PATH"]
-    credentials=os.environ["OUTPUT_CREDENTIALS"]
 
-    fu=FileUploader(filename, protocol, url, path, credentials)
-    fu.upload()
+    FileUploader().main()
+    print "Data upload ENDED successfully!"
 
   except KeyError as e:
-       print "Please set the environment variable ", e
+       print "[ERROR] Please set the environment variable ", e
        sys.exit(1)
   except ValueError as e:
-       print "Invalid value: ", e
+       print "[ERROR] Invalid value: ", e
        sys.exit(1) 
+  except RuntimeError as e:
+       print "[ERROR] ", e
+       sys.exit(1)
+  except:
+       print "Unexpected error:", sys.exc_info()[0]
+       raise
 
 
 if __name__ == '__main__':
