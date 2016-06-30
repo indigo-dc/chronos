@@ -5,7 +5,7 @@ env
 mkdir /mnt/onedata
 ONECLIENT_AUTHORIZATION_TOKEN="$ONEDATA_SERVICE_TOKEN" PROVIDER_HOSTNAME="$ONEDATA_PROVIDERS" oneclient /mnt/onedata
 
-cd /mnt/oneclient/
+cd /mnt/onedata/
 
 export UPLOAD_DIR="$ONEDATA_SPACE"/"$ONEDATA_PATH"
 
