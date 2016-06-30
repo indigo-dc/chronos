@@ -52,6 +52,7 @@ class FileUploader(object):
     def __init__(self):
         
         #read mandatory env variables
+        self.path=os.environ["UPLOAD_DIR"]
         self.filenames=os.environ["OUTPUT_FILENAMES"].split(",")
         self.protocol=os.environ["OUTPUT_PROTOCOL"].lower()
         self.url=os.environ["OUTPUT_ENDPOINT"]
@@ -71,8 +72,8 @@ class FileUploader(object):
 
         # check file existence        
         for filename in self.filenames:
-           if not os.path.isfile(filename):
-              raise ValueError('"%(path)s" is not a valid file.' % {'path': filename})
+           if not os.path.isfile(self.path+filename):
+              raise ValueError('"%(path)s" is not a valid file.' % {'path': self.path+filename})
 
         # check supported protocol
         if self.protocol not in allowed_protocols:
@@ -94,8 +95,8 @@ class FileUploader(object):
     def _httpUpload(self):
         
         for filename in self.filenames:
-            print "[INFO] Uploading File %s" % filename
-            cmd = "curl -k -u %s:%s --write-out %%{http_code} --silent --output /dev/null -X PUT %s/%s/%s -T %s" % (self.username, self.password, self.url, self.outpath, os.path.basename(filename), filename) 
+            print "[INFO] Uploading File %s" % self.path+filename
+            cmd = "curl -k -u %s:%s --write-out %%{http_code} --silent --output /dev/null -X PUT %s/%s/%s -T %s" % (self.username, self.password, self.url, self.outpath, filename, self.path+filename) 
             out = run_command(cmd)
            
             if out[0:2] != '20':
@@ -115,12 +116,11 @@ class FileUploader(object):
         if self.region != "":
            options = "--region " + self.region
         
-        path=self.outpath.strip('/')
+        bucket=self.outpath.strip('/')
         
-        #outpath should be in the form <bucket>/<object> e.g.: "container/tesfile.zip"
         for filename in self.filenames:
-           print "[INFO] Uploading File %s" % filename
-           cmd = "aws --no-verify-ssl --endpoint-url %s %s s3 cp %s s3://%s/%s" % (self.url, options, filename, path, os.path.basename(filename))
+           print "[INFO] Uploading File %s" % self.path+filename
+           cmd = "aws --no-verify-ssl --endpoint-url %s %s s3 cp %s s3://%s/%s" % (self.url, options, self.path+filename, bucket, filename)
            out = run_command(cmd, env)
            print out
 
@@ -138,13 +138,11 @@ class FileUploader(object):
         if self.region != "":
            env['OS_REGION_NAME']=self.region
 
-        #outpath should be in the form <container>/<object>  e.g. "container/prova/tesfile.zip"
-        path=self.outpath.strip('/')
-        container, objectname = path.split("/",1)
+        container=self.outpath.strip('/')
         
         for filename in self.filenames:
-           print "[INFO] Uploading File %s to container %s with object name %s" % (filename, container, objectname+os.path.basename(filename))
-           cmd = "swift --insecure upload %s %s --object-name %s" % (container, filename, objectname+os.path.basename(filename))
+           print "[INFO] Uploading File %s to container %s with object name %s" % (self.path+filename, container, filename)
+           cmd = "swift --insecure upload %s %s --object-name %s" % (container, self.path+filename, filename)
            out = run_command(cmd, env)
            print out 
 
