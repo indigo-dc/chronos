@@ -11,5 +11,5 @@ export UPLOAD_DIR="$ONEDATA_SPACE"/"$ONEDATA_PATH"
 
 curl -s https://raw.githubusercontent.com/indigo-dc/chronos/devel/utilities/upload_job_output/main.py | python
 
-cd / && umount /mnt/oneclient
+cd / && umount /mnt/onedata
 
