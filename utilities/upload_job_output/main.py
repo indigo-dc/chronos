@@ -72,8 +72,9 @@ class FileUploader(object):
 
         # check file existence        
         for filename in self.filenames:
-           if not os.path.isfile(self.path+filename):
-              raise ValueError('"%(path)s" is not a valid file.' % {'path': self.path+filename})
+           filepath=os.path.join(self.path,filename)
+           if not os.path.isfile(filepath):
+              raise ValueError('"%(path)s" is not a valid file.' % {'path': filepath})
 
         # check supported protocol
         if self.protocol not in allowed_protocols:
@@ -95,8 +96,9 @@ class FileUploader(object):
     def _httpUpload(self):
         
         for filename in self.filenames:
-            print "[INFO] Uploading File %s" % self.path+filename
-            cmd = "curl -k -u %s:%s --write-out %%{http_code} --silent --output /dev/null -X PUT %s/%s/%s -T %s" % (self.username, self.password, self.url, self.outpath, filename, self.path+filename) 
+            filepath=os.path.join(self.path,filename)
+            print "[INFO] Uploading File %s" % filepath
+            cmd = "curl -k -u %s:%s --write-out %%{http_code} --silent --output /dev/null -X PUT %s/%s/%s -T %s" % (self.username, self.password, self.url, self.outpath, filename, filepath) 
             out = run_command(cmd)
            
             if out[0:2] != '20':
@@ -119,8 +121,9 @@ class FileUploader(object):
         bucket=self.outpath.strip('/')
         
         for filename in self.filenames:
-           print "[INFO] Uploading File %s" % self.path+filename
-           cmd = "aws --no-verify-ssl --endpoint-url %s %s s3 cp %s s3://%s/%s" % (self.url, options, self.path+filename, bucket, filename)
+           filepath=os.path.join(self.path,filename)
+           print "[INFO] Uploading File %s" % filepath
+           cmd = "aws --no-verify-ssl --endpoint-url %s %s s3 cp %s s3://%s/%s" % (self.url, options, filepath, bucket, filename)
            out = run_command(cmd, env)
            print out
 
@@ -141,8 +144,9 @@ class FileUploader(object):
         container=self.outpath.strip('/')
         
         for filename in self.filenames:
-           print "[INFO] Uploading File %s to container %s with object name %s" % (self.path+filename, container, filename)
-           cmd = "swift --insecure upload %s %s --object-name %s" % (container, self.path+filename, filename)
+           filepath=os.path.join(self.path,filename)
+           print "[INFO] Uploading File %s to container %s with object name %s" % (filepath, container, filename)
+           cmd = "swift --insecure upload %s %s --object-name %s" % (container, filepath, filename)
            out = run_command(cmd, env)
            print out 
 
