@@ -19,5 +19,5 @@ sleep 5
 
 echo "Umounting onedata space..."
 cd /
-timeout -k 10 umount /mnt/onedata
+timeout -s SIGKILL 10 umount /mnt/onedata
 
