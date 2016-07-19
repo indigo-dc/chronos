@@ -15,5 +15,9 @@ curl -s https://raw.githubusercontent.com/indigo-dc/chronos/master/utilities/upl
 echo "Cleaning temporary files"
 rm -rf "$UPLOAD_DIR"/*
 
-cd / && umount /mnt/onedata
+sleep 5
+
+echo "Umounting onedata space..."
+cd /
+timeout -k 10 umount /mnt/onedata
 
